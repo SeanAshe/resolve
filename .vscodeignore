@@ -22,4 +22,5 @@ CLAUDE.md
 .vscode-test.mjs
 .idea/**
 .git/**
+.github/**
 **/*.vsix

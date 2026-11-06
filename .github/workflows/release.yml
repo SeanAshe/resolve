@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish to the Marketplace and attach the VSIX to a GitHub release
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Test
+        run: npm run test:unit
+
+      - name: Read version
+        id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Require the tag to match package.json
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          expected="v${{ steps.version.outputs.version }}"
+          if [ "$GITHUB_REF_NAME" != "$expected" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json ($expected)"
+            exit 1
+          fi
+
+      - name: Package
+        run: npm run package
+
+      - name: Publish to the Marketplace
+        if: startsWith(github.ref, 'refs/tags/') || inputs.publish
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx vsce publish --packagePath "resolve-${{ steps.version.outputs.version }}.vsix"
+
+      - name: Attach the VSIX to a GitHub release
+        if: startsWith(github.ref, 'refs/tags/') || inputs.publish
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          files: resolve-${{ steps.version.outputs.version }}.vsix
+          generate_release_notes: true
+
+      - name: Upload the VSIX as a workflow artifact
+        if: ${{ !startsWith(github.ref, 'refs/tags/') && !inputs.publish }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: resolve-${{ steps.version.outputs.version }}
+          path: resolve-${{ steps.version.outputs.version }}.vsix
+          if-no-files-found: error
