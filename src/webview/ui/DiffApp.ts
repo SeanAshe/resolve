@@ -20,6 +20,7 @@ import {
   collapsedKey,
   DEFAULT_COLLAPSE_THRESHOLD,
   diffPaneTexts,
+  hiddenModelLineRanges,
   nextHunkSectionIndex,
   previousHunkSectionIndex,
   sectionIndexAtWorkingLine,
@@ -102,6 +103,10 @@ export async function mountDiffApp(
   // NOT touch the working pane — they were generated from an earlier
   // snapshot and would overwrite the user's in-flight characters.
   let lastSavedWorkingContent: string | null = null;
+  // setValue fires onDidChangeModelContent. Collapse must not persist the
+  // buffer: the model stays the real file, and hidden areas only change
+  // what is drawn. The flag also covers the initial fill and later refreshes.
+  let ignoreWorkingEdits = false;
 
   function refresh(): void {
     sections = buildDiffSections(currentFile, stagedHunkIds, {
@@ -113,7 +118,12 @@ export async function mountDiffApp(
     const monacoWorking = duo.working.getValue();
     const workingMatchesSave =
       lastSavedWorkingContent === null || monacoWorking === lastSavedWorkingContent;
+    ignoreWorkingEdits = true;
     duo.setContent(workingMatchesSave ? texts : { head: texts.head });
+    // Don't refold the working pane while the user is mid-edit — its buffer
+    // no longer matches the file the sections were built from.
+    applyHiddenAreas(workingMatchesSave ? ['head', 'working'] : ['head']);
+    ignoreWorkingEdits = false;
     (painter as unknown as { sections: DiffSection[] }).sections = sections;
     (overlay as unknown as { sections: DiffSection[] }).sections = sections;
     painter.paint();
@@ -134,37 +144,61 @@ export async function mountDiffApp(
     workingDecorations = duo.working.createDecorationsCollection(decorationsForPane('working'));
   }
 
+  function applyHiddenAreas(panes: readonly ('head' | 'working')[]): void {
+    for (const pane of panes) {
+      const editor = pane === 'head' ? duo.head : duo.working;
+      const ranges = hiddenModelLineRanges(sections, pane).map((range) => ({
+        startLineNumber: range.startLineNumber,
+        startColumn: 1,
+        endLineNumber: range.endLineNumber,
+        endColumn: 1,
+      }));
+      editor.setHiddenAreas(ranges, 'diff-collapse');
+    }
+  }
+
   function decorationsForPane(pane: 'head' | 'working'): MonacoDecoration[] {
     const decorations: MonacoDecoration[] = [];
-    let currentLine = 1;
+    let modelLine = 1;
+    let lastVisibleLine = 0;
     for (const section of sections) {
+      const count = pane === 'head' ? section.headLineCount : section.workingLineCount;
       if (section.kind === 'ctx-collapsed') {
-        decorations.push({
-          range: wholeLine(currentLine, currentLine),
-          options: { isWholeLine: true, className: 'ctx-collapsed-line' },
-        });
-        currentLine += 1;
+        if (count > 0) {
+          decorations.push({
+            range: wholeLine(modelLine, modelLine),
+            options: { isWholeLine: true, className: 'ctx-collapsed-line' },
+          });
+          lastVisibleLine = modelLine;
+        }
+        modelLine += count;
         continue;
       }
-      const realCount = pane === 'head' ? section.headLineCount : section.workingLineCount;
       if (section.kind === 'hunk') {
-        if (realCount > 0) {
-          decorations.push({
-            range: wholeLine(currentLine, currentLine + realCount - 1),
-            options: { isWholeLine: true, className: paneTintClass(section, pane) },
-          });
-        } else if (currentLine > 1) {
-          // Zero-line hunk on this side: paint a 2px stroke at the BOTTOM
-          // of the previous line so the deletion / insertion anchor is
-          // visible without faking an empty row.
+        if (count > 0) {
+          const className = paneTintClass(section, pane);
+          if (className) {
+            decorations.push({
+              range: wholeLine(modelLine, modelLine + count - 1),
+              options: { isWholeLine: true, className },
+            });
+          }
+          lastVisibleLine = modelLine + count - 1;
+        } else if (lastVisibleLine > 0) {
+          // Zero-line hunk on this side: paint a stroke on the last VISIBLE
+          // line. The model line immediately above may be inside a hidden
+          // collapsed tail, which would make the marker disappear.
           const markerClass = pane === 'head' ? 'diff-marker-added' : 'diff-marker-removed';
           decorations.push({
-            range: wholeLine(currentLine - 1, currentLine - 1),
+            range: wholeLine(lastVisibleLine, lastVisibleLine),
             options: { isWholeLine: true, className: markerClass },
           });
         }
+        modelLine += count;
+        continue;
       }
-      currentLine += realCount;
+      if (count > 0) lastVisibleLine = modelLine + count - 1;
+      modelLine += count;
     }
     return decorations;
   }
@@ -222,6 +256,7 @@ export async function mountDiffApp(
   const WORKING_SAVE_DEBOUNCE_MS = 300;
   let workingSaveTimer: number | null = null;
   duo.working.onDidChangeModelContent(() => {
+    if (ignoreWorkingEdits) return;
     if (workingSaveTimer !== null) window.clearTimeout(workingSaveTimer);
     workingSaveTimer = window.setTimeout(() => {
       workingSaveTimer = null;

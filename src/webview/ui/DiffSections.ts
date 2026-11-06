@@ -172,50 +172,47 @@ function classifyHunk(hunk: DiffHunkDTO): HunkClass {
 }
 
 /**
- * Returns the two strings Monaco renders. Each pane gets its actual file
- * content — no padding. The shorter side simply has fewer rows; vertical
- * alignment is handled by the virtual scroll sync, and zero-line hunks
- * are signalled by inter-line markers (a colored 2px stroke at the
- * boundary), exactly like the merge view does for one-sided changes.
+ * Returns the two strings Monaco renders. Always the real file text.
+ * Collapse hides lines with Monaco hidden areas instead of rewriting the
+ * buffer — rewriting it used to drop unchanged lines out of the working
+ * tree the next time the buffer was saved.
  */
-export function diffPaneTexts(file: DiffFileDTO, sections: readonly DiffSection[]): DiffPaneTexts {
-  // Fast path: no collapsed sections → emit the original file content
-  // verbatim, no per-line concat work.
-  if (!sections.some((section) => section.kind === 'ctx-collapsed')) {
-    return {
-      head: file.headLines.join('\n'),
-      working: file.workingLines.join('\n'),
-    };
-  }
-  const headOut: string[] = [];
-  const workingOut: string[] = [];
-  let headCursor = 0;
-  let workingCursor = 0;
+export function diffPaneTexts(file: DiffFileDTO, _sections: readonly DiffSection[]): DiffPaneTexts {
+  return {
+    head: file.headLines.join('\n'),
+    working: file.workingLines.join('\n'),
+  };
+}
+
+export interface ModelLineRange {
+  /** 1-based inclusive. */
+  readonly startLineNumber: number;
+  /** 1-based inclusive. */
+  readonly endLineNumber: number;
+}
+
+/**
+ * Model lines to hide for a collapsed context range. The first line stays
+ * visible as the preview; the rest of the range is a hidden area so both
+ * panes keep the real file (and the same line numbers) underneath.
+ */
+export function hiddenModelLineRanges(
+  sections: readonly DiffSection[],
+  pane: 'head' | 'working',
+): ModelLineRange[] {
+  const ranges: ModelLineRange[] = [];
+  let modelLine = 1;
   for (const section of sections) {
-    if (section.kind === 'ctx-collapsed') {
-      // Render one placeholder line on each pane carrying the first
-      // unchanged line as a hint; advance the source cursors past the
-      // full collapsed range so subsequent sections pick up where the
-      // original content actually continues.
-      const headPreview = file.headLines[headCursor] ?? '';
-      const workingPreview = file.workingLines[workingCursor] ?? '';
-      headOut.push(headPreview);
-      workingOut.push(workingPreview);
-      headCursor += section.headLineCount;
-      workingCursor += section.workingLineCount;
-      continue;
+    const count = pane === 'head' ? section.headLineCount : section.workingLineCount;
+    if (section.kind === 'ctx-collapsed' && count > 1) {
+      ranges.push({
+        startLineNumber: modelLine + 1,
+        endLineNumber: modelLine + count - 1,
+      });
     }
-    const headSlice = file.headLines.slice(headCursor, headCursor + section.headLineCount);
-    const workingSlice = file.workingLines.slice(
-      workingCursor,
-      workingCursor + section.workingLineCount,
-    );
-    headOut.push(...headSlice);
-    workingOut.push(...workingSlice);
-    headCursor += section.headLineCount;
-    workingCursor += section.workingLineCount;
+    modelLine += count;
   }
-  return { head: headOut.join('\n'), working: workingOut.join('\n') };
+  return ranges;
 }
 
 /* ============================================================================
@@ -291,9 +288,9 @@ export function previousHunkSectionIndex(
  * the result to Monaco without a guard.
  */
 function workingPaneRowCount(section: DiffSection): number {
-  // The working Monaco pane only renders 1 line per collapsed ctx
-  // placeholder; otherwise it carries one line per real working-side row.
-  if (section.kind === 'ctx-collapsed') return 1;
+  // Model coordinates. Collapsed ranges still occupy their real lines;
+  // Monaco hides the tail via hidden areas, so cursor and navigation
+  // must keep using the file's line numbers.
   return section.workingLineCount;
 }
 

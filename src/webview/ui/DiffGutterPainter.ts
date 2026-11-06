@@ -42,13 +42,12 @@ export class DiffGutterPainter {
           // unchanged lines. The line-number counter jumps past the whole
           // collapsed range so subsequent sections stay aligned with the
           // file's real numbering.
-          realLineNumber += paneId === 'head' ? section.headLineCount : section.workingLineCount;
+          const hiddenCount = paneId === 'head' ? section.headLineCount : section.workingLineCount;
+          realLineNumber += hiddenCount;
           columnContents.forEach((columnContent, columnIndex) => {
             const row = appendLnRow(columnContent, {
-              classNames: ['ctx-collapsed'],
-              // Line-number column is intentionally blank — there's no
-              // single number that describes the collapsed range.
-              text: '',
+              classNames: ['ctx-collapsed', 'diff-collapse-label'],
+              text: columnShowsLineNumbers[columnIndex] ? '…' : '',
               lineHeightPx: this.lineHeightPx,
             });
             row.setAttribute('data-collapsed-key', collapsedKey(section));

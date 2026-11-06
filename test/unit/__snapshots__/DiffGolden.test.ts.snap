@@ -41,8 +41,8 @@ exports[`Golden: Diff Sections pipeline > sections + pane texts under long-conte
 exports[`Golden: Diff Sections pipeline > sections + pane texts under long-context-collapse-enabled > long-context-collapse-enabled 1`] = `
 {
   "panes": {
-    "head": 3,
-    "working": 3,
+    "head": 25,
+    "working": 25,
   },
   "sections": [
     {
@@ -83,8 +83,8 @@ exports[`Golden: Diff Sections pipeline > sections + pane texts under long-conte
 exports[`Golden: Diff Sections pipeline > sections + pane texts under long-context-collapse-enabled-with-one-expanded > long-context-collapse-enabled-with-one-expanded 1`] = `
 {
   "panes": {
-    "head": 14,
-    "working": 14,
+    "head": 25,
+    "working": 25,
   },
   "sections": [
     {

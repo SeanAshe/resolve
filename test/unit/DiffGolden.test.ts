@@ -3,6 +3,7 @@ import {
   buildDiffSections,
   collapsedKey,
   diffPaneTexts,
+  hiddenModelLineRanges,
   type BuildDiffSectionsOptions,
   type DiffSection,
 } from '../../src/webview/ui/DiffSections';
@@ -178,6 +179,39 @@ function serializeSections(sections: readonly DiffSection[]): unknown[] {
     return base;
   });
 }
+
+describe('hiddenModelLineRanges', () => {
+  it('hides every collapsed line except the preview', () => {
+    const file = buildFile(
+      LONG_HEAD,
+      LONG_WORKING,
+      [hunk(13, 13, ['original line 13'], ['CHANGED line 13'])],
+    );
+    const sections = buildDiffSections(file, new Set(), {
+      collapseUnchanged: true,
+      collapseThreshold: 6,
+      expandedContextKeys: new Set(),
+    });
+    expect(hiddenModelLineRanges(sections, 'working')).toEqual([
+      { startLineNumber: 2, endLineNumber: 12 },
+      { startLineNumber: 15, endLineNumber: 25 },
+    ]);
+    expect(hiddenModelLineRanges(sections, 'head')).toEqual([
+      { startLineNumber: 2, endLineNumber: 12 },
+      { startLineNumber: 15, endLineNumber: 25 },
+    ]);
+  });
+
+  it('hides nothing when collapse is off', () => {
+    const file = buildFile(
+      LONG_HEAD,
+      LONG_WORKING,
+      [hunk(13, 13, ['original line 13'], ['CHANGED line 13'])],
+    );
+    const sections = buildDiffSections(file, new Set());
+    expect(hiddenModelLineRanges(sections, 'working')).toEqual([]);
+  });
+});
 
 function countLines(text: string): number {
   return text === '' ? 0 : text.split('\n').length;

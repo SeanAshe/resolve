@@ -32,8 +32,11 @@ export class DiffScrollSync {
 
   setSections(sections: DiffSection[]): void {
     this.engine.setSections(sections, (section) => ({
-      head: section.headLineCount,
-      working: section.workingLineCount,
+      // Collapsed context is one view row (the preview line). The model
+      // still holds the full range; hidden areas remove the rest from
+      // the scroll height, so the virtual scroller must follow the view.
+      head: viewLineCount(section, 'head'),
+      working: viewLineCount(section, 'working'),
     }));
   }
 
@@ -58,4 +61,9 @@ export class DiffScrollSync {
   currentSectionIndex(): number {
     return this.engine.currentSectionIndexForPane('working');
   }
+}
+
+function viewLineCount(section: DiffSection, pane: 'head' | 'working'): number {
+  if (section.kind === 'ctx-collapsed') return 1;
+  return pane === 'head' ? section.headLineCount : section.workingLineCount;
 }

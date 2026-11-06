@@ -31,7 +31,9 @@ export class DiffBezierOverlay {
     let headLine = 1;
     let workingLine = 1;
     for (const section of this.sections) {
-      if (section.kind === 'ctx') {
+      if (section.kind === 'ctx' || section.kind === 'ctx-collapsed') {
+        // Model line numbers. Hidden areas fold the collapsed tail, so
+        // getTopForLineNumber already returns the view Y for the next hunk.
         headLine += section.headLineCount;
         workingLine += section.workingLineCount;
         continue;

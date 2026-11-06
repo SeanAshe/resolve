@@ -401,6 +401,14 @@
       background-color: transparent;
       color: transparent !important;
     }
+    /* Diff gutter: the collapsed row is the only label (no breadcrumb chip).
+       Keep it readable and clickable so the hidden range is obvious. */
+    .ln-row.ctx-collapsed.diff-collapse-label {
+      color: rgba(200, 200, 200, 0.9) !important;
+      text-align: center;
+      font-style: italic;
+      cursor: pointer;
+    }
     /* Monaco line for the collapsed placeholder — invisible. The wave
        SVG band traverses the row visually; the breadcrumb chip floats
        above with the only label. */

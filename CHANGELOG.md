@@ -4,6 +4,16 @@ All notable changes to the Resolve extension are tracked here. The format
 is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.6] — 2026-11-06
+
+### Fixed
+
+- **Collapse unchanged fragments no longer rewrites the file.** Both diff
+  panes keep the real text and hide the unchanged tail with Monaco hidden
+  areas, so folding cannot save a truncated buffer back to the working tree.
+  The collapsed row is a single clickable `…` marker, and deletion strokes
+  no longer repeat down the blank area below a change.
+
 ## [0.1.5] — 2026-07-07
 
 ### Changed
